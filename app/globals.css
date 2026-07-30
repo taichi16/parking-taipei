@@ -71,6 +71,36 @@ dl { margin:20px 0; } dl div { border-bottom:1px solid var(--line); padding:13px
 footer { max-width:1280px; margin:auto; padding:22px 32px 32px; display:flex; justify-content:space-between; color:#718078; font-size:11px; }
 footer a { color:inherit; }
 .leaflet-popup-content-wrapper { border-radius:14px!important; font-family:inherit; }
+.parking-marker-host { background:transparent!important; border:0!important; }
+.parking-pin {
+  --pin:#88908c;
+  width:48px; height:48px;
+  border-radius:50% 50% 50% 8px;
+  background:var(--pin);
+  border:3px solid #fff;
+  box-shadow:0 3px 10px #17352d55;
+  color:#fff;
+  display:grid;
+  place-items:center;
+  transform:rotate(-45deg);
+  transition:transform .15s ease,filter .15s ease;
+}
+.parking-pin span {
+  transform:rotate(45deg);
+  font-size:15px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:-.04em;
+  text-shadow:0 1px 1px #17352d22;
+}
+.parking-pin span.compact { font-size:12px; }
+.parking-pin.good { --pin:#079b8e; }
+.parking-pin.warn { --pin:#ed922f; }
+.parking-pin.danger { --pin:#dd5a4b; }
+.parking-pin.muted { --pin:#78827d; }
+.parking-pin.selected { transform:rotate(-45deg) scale(1.18); filter:drop-shadow(0 3px 5px #17352d55); z-index:2; }
+.parking-pin.selected span { transform:rotate(45deg); }
+.leaflet-marker-icon { background:transparent; border:0; }
 
 @media (max-width:700px) {
   .topbar { height:66px; padding:0 18px; }
@@ -87,4 +117,5 @@ footer a { color:inherit; }
   footer { padding:18px; flex-direction:column; gap:8px; }
   .sheet-backdrop { padding:0; }
   .detail-sheet { border-radius:26px 26px 0 0; padding:24px 20px calc(24px + env(safe-area-inset-bottom)); }
+  .parking-pin { width:46px; height:46px; }
 }
