@@ -9,20 +9,14 @@ const ParkingMap = dynamic(() => import("./parking-map"), {
 });
 
 export type Parking = {
-  id: string;
-  area: string;
-  name: string;
-  address: string;
-  payex: string;
-  serviceTime: string;
-  totalCar: number;
-  availableCar: number | null;
-  availabilityCode: number | null;
-  lat: number | null;
-  lng: number | null;
-  updateTime: string;
+  id: string; area: string; name: string; address: string; payex: string;
+  serviceTime: string; totalCar: number; availableCar: number | null;
+  availabilityCode: number | null; lat: number | null; lng: number | null; updateTime: string;
 };
 
+type FavoriteGroup = { id: string; name: string; parkingIds: string[] };
+
+const STORAGE_KEY = "parking-favorite-groups-v1";
 const districts = ["全部地區", "松山區", "信義區", "大安區", "中山區", "中正區", "大同區", "萬華區", "文山區", "南港區", "內湖區", "士林區", "北投區"];
 
 function availabilityLabel(p: Parking) {
@@ -48,10 +42,14 @@ export default function Home() {
   const [selected, setSelected] = useState<Parking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [groups, setGroups] = useState<FavoriteGroup[]>([]);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [saveTarget, setSaveTarget] = useState<Parking | null>(null);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [storageReady, setStorageReady] = useState(false);
 
   const load = async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const response = await fetch("/api/parking", { cache: "no-store" });
       if (!response.ok) throw new Error("資料讀取失敗");
@@ -59,111 +57,84 @@ export default function Home() {
       setParks(data.parks);
     } catch {
       setError("目前無法取得即時資料，請稍後再試。");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setGroups(JSON.parse(saved));
+    } catch { /* ignore invalid device data */ }
+    setStorageReady(true);
+  }, []);
+  useEffect(() => {
+    if (storageReady) localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+  }, [groups, storageReady]);
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLocaleLowerCase("zh-TW");
     return parks
       .filter((p) => district === "全部地區" || p.area === district)
       .filter((p) => !q || `${p.name} ${p.address} ${p.area}`.toLocaleLowerCase("zh-TW").includes(q))
-      .sort((a, b) => {
-        const av = a.availableCar ?? -999;
-        const bv = b.availableCar ?? -999;
-        return bv - av;
-      });
+      .sort((a, b) => (b.availableCar ?? -999) - (a.availableCar ?? -999));
   }, [parks, district, keyword]);
 
+  const favoriteCount = useMemo(() => new Set(groups.flatMap((g) => g.parkingIds)).size, [groups]);
+  const isSaved = (groupId: string, parkingId: string) => groups.find((g) => g.id === groupId)?.parkingIds.includes(parkingId) ?? false;
+  const toggleFavorite = (groupId: string, parkingId: string) => setGroups((current) => current.map((g) => g.id === groupId ? { ...g, parkingIds: g.parkingIds.includes(parkingId) ? g.parkingIds.filter((id) => id !== parkingId) : [...g.parkingIds, parkingId] } : g));
+  const createGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setGroups((current) => [...current, { id, name, parkingIds: saveTarget ? [saveTarget.id] : [] }]);
+    setNewGroupName("");
+  };
+  const removeGroup = (groupId: string) => setGroups((current) => current.filter((g) => g.id !== groupId));
   const updateTime = parks[0]?.updateTime;
 
   return (
     <main>
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">P</span>
-          <div><strong>泊台北</strong><small>即時停車位查詢</small></div>
+        <div className="brand"><span className="brand-mark">P</span><div><strong>泊台北</strong><small>即時停車位查詢</small></div></div>
+        <div className="header-actions">
+          <button className="favorites-button" onClick={() => setFavoritesOpen(true)}><span>★</span> 常用停車場 {favoriteCount > 0 && <b>{favoriteCount}</b>}</button>
+          <button className="refresh" onClick={load} disabled={loading} aria-label="重新整理即時車位"><span className={loading ? "spin" : ""}>↻</span> 更新</button>
         </div>
-        <button className="refresh" onClick={load} disabled={loading} aria-label="重新整理即時車位">
-          <span className={loading ? "spin" : ""}>↻</span> 更新
-        </button>
       </header>
 
       <section className="hero">
         <p className="eyebrow">TAIPEI PARKING</p>
         <h1>找到空位，<br /><em>少繞一圈。</em></h1>
         <p className="intro">整合台北市官方停車場與即時剩餘車位，出發前先看一眼。</p>
-
         <div className="search-panel">
-          <label className="search-box">
-            <span>⌕</span>
-            <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜尋停車場、地址或地標" aria-label="關鍵字搜尋" />
-            {keyword && <button onClick={() => setKeyword("")} aria-label="清除搜尋">×</button>}
-          </label>
-          <div className="districts" aria-label="行政區篩選">
-            {districts.map((name) => (
-              <button key={name} className={district === name ? "active" : ""} onClick={() => setDistrict(name)}>{name}</button>
-            ))}
-          </div>
+          <label className="search-box"><span>⌕</span><input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜尋停車場、地址或地標" aria-label="關鍵字搜尋" />{keyword && <button onClick={() => setKeyword("")} aria-label="清除搜尋">×</button>}</label>
+          <div className="districts" aria-label="行政區篩選">{districts.map((name) => <button key={name} className={district === name ? "active" : ""} onClick={() => setDistrict(name)}>{name}</button>)}</div>
         </div>
       </section>
 
       <section className="workspace">
-        <div className="result-head">
-          <div>
-            <p>{district === "全部地區" ? "台北市全區" : district}</p>
-            <h2>{loading ? "正在取得資料" : `找到 ${filtered.length} 個停車場`}</h2>
-          </div>
-          <div className="view-toggle" role="group" aria-label="檢視方式">
-            <button className={mode === "map" ? "active" : ""} onClick={() => setMode("map")}>地圖</button>
-            <button className={mode === "list" ? "active" : ""} onClick={() => setMode("list")}>列表</button>
-          </div>
-        </div>
-
-        {error ? (
-          <div className="notice"><p>{error}</p><button onClick={load}>再試一次</button></div>
-        ) : mode === "map" ? (
-          <div className="map-wrap">
-            <ParkingMap parks={filtered.filter((p) => p.lat && p.lng)} selected={selected} onSelect={setSelected} />
-            <div className="legend"><span><i className="good" />有空位</span><span><i className="warn" />少量</span><span><i className="danger" />已滿／近滿</span></div>
-          </div>
+        <div className="result-head"><div><p>{district === "全部地區" ? "台北市全區" : district}</p><h2>{loading ? "正在取得資料" : `找到 ${filtered.length} 個停車場`}</h2></div><div className="view-toggle" role="group" aria-label="檢視方式"><button className={mode === "map" ? "active" : ""} onClick={() => setMode("map")}>地圖</button><button className={mode === "list" ? "active" : ""} onClick={() => setMode("list")}>列表</button></div></div>
+        {error ? <div className="notice"><p>{error}</p><button onClick={load}>再試一次</button></div> : mode === "map" ? (
+          <div className="map-wrap"><ParkingMap parks={filtered.filter((p) => p.lat && p.lng)} selected={selected} onSelect={setSelected} /><div className="legend"><span><i className="good" />有空位</span><span><i className="warn" />少量</span><span><i className="danger" />已滿／近滿</span></div></div>
         ) : (
-          <div className="cards">
-            {filtered.slice(0, 100).map((p) => (
-              <button className="parking-card" key={p.id} onClick={() => setSelected(p)}>
-                <span className={`availability ${statusClass(p)}`}><strong>{availabilityLabel(p)}</strong><small>汽車空位</small></span>
-                <span className="card-copy"><small>{p.area}</small><strong>{p.name}</strong><span>{p.address}</span></span>
-                <span className="chevron">›</span>
-              </button>
-            ))}
-          </div>
+          <div className="cards">{filtered.slice(0, 100).map((p) => <button className="parking-card" key={p.id} onClick={() => setSelected(p)}><span className={`availability ${statusClass(p)}`}><strong>{availabilityLabel(p)}</strong><small>汽車空位</small></span><span className="card-copy"><small>{p.area}</small><strong>{p.name}</strong><span>{p.address}</span></span><span className="chevron">›</span></button>)}</div>
         )}
       </section>
 
       {selected && (
-        <div className="sheet-backdrop" onClick={() => setSelected(null)}>
-          <article className="detail-sheet" onClick={(e) => e.stopPropagation()}>
-            <button className="sheet-close" onClick={() => setSelected(null)} aria-label="關閉詳細資料">×</button>
-            <p className="district-label">{selected.area}</p>
-            <h2>{selected.name}</h2>
-            <div className={`big-status ${statusClass(selected)}`}><span>{availabilityLabel(selected)}</span><small>汽車即時空位／共 {selected.totalCar} 格</small></div>
-            <dl>
-              <div><dt>地址</dt><dd>{selected.address || "未提供"}</dd></div>
-              <div><dt>開放時間</dt><dd>{selected.serviceTime || "請依現場公告"}</dd></div>
-              <div><dt>收費方式</dt><dd>{selected.payex || "請依現場公告"}</dd></div>
-            </dl>
-            <a className="navigate" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selected.address || `${selected.lat},${selected.lng}`)}`} target="_blank" rel="noreferrer">開啟導航 ↗</a>
-          </article>
-        </div>
+        <div className="sheet-backdrop" onClick={() => setSelected(null)}><article className="detail-sheet" onClick={(e) => e.stopPropagation()}><button className="sheet-close" onClick={() => setSelected(null)} aria-label="關閉詳細資料">×</button><p className="district-label">{selected.area}</p><h2>{selected.name}</h2><div className={`big-status ${statusClass(selected)}`}><span>{availabilityLabel(selected)}</span><small>汽車即時空位／共 {selected.totalCar} 格</small></div><dl><div><dt>地址</dt><dd>{selected.address || "未提供"}</dd></div><div><dt>開放時間</dt><dd>{selected.serviceTime || "請依現場公告"}</dd></div><div><dt>收費方式</dt><dd>{selected.payex || "請依現場公告"}</dd></div></dl><div className="detail-actions"><button className="save-favorite" onClick={() => setSaveTarget(selected)}>☆ 加入常用停車場</button><a className="navigate" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selected.address || `${selected.lat},${selected.lng}`)}`} target="_blank" rel="noreferrer">開啟導航 ↗</a></div></article></div>
       )}
 
-      <footer>
-        <span>{updateTime ? `車位資料更新：${updateTime}` : "正在同步官方資料"}</span>
-        <a href="https://data.taipei/dataset/detail?id=d5c0656b-5250-4179-a491-c94daa56ef2c" target="_blank" rel="noreferrer">資料來源：臺北市資料大平臺 ↗</a>
-      </footer>
+      {saveTarget && (
+        <div className="sheet-backdrop layer-top" onClick={() => setSaveTarget(null)}><article className="save-sheet" onClick={(e) => e.stopPropagation()}><button className="sheet-close" onClick={() => setSaveTarget(null)} aria-label="關閉">×</button><p className="district-label">儲存至分類</p><h2>{saveTarget.name}</h2>{groups.length > 0 ? <div className="group-options">{groups.map((group) => <button key={group.id} className={isSaved(group.id, saveTarget.id) ? "saved" : ""} onClick={() => toggleFavorite(group.id, saveTarget.id)}><span>{isSaved(group.id, saveTarget.id) ? "★" : "☆"}</span><strong>{group.name}</strong><small>{group.parkingIds.length} 個停車場</small></button>)}</div> : <p className="empty-copy">建立第一個分類，方便下次快速找到。</p>}<div className="new-group"><label htmlFor="new-group-name">新增分類</label><div><input id="new-group-name" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createGroup()} placeholder="例如：公司附近" maxLength={20} /><button onClick={createGroup} disabled={!newGroupName.trim()}>建立並儲存</button></div></div></article></div>
+      )}
+
+      {favoritesOpen && (
+        <div className="sheet-backdrop layer-top" onClick={() => setFavoritesOpen(false)}><article className="favorites-sheet" onClick={(e) => e.stopPropagation()}><button className="sheet-close" onClick={() => setFavoritesOpen(false)} aria-label="關閉常用停車場">×</button><p className="district-label">MY PARKING</p><h2>常用停車場</h2><p className="favorites-intro">依照自己的使用情境分類，常去的停車場一點就到。</p>{groups.length === 0 ? <div className="favorites-empty"><span>☆</span><strong>還沒有常用停車場</strong><p>開啟任一停車場詳細資料，即可建立分類並收藏。</p></div> : <div className="favorite-groups">{groups.map((group) => { const items = group.parkingIds.map((id) => parks.find((p) => p.id === id)).filter(Boolean) as Parking[]; return <section key={group.id} className="favorite-group"><div className="favorite-group-head"><div><h3>{group.name}</h3><span>{items.length} 個停車場</span></div><button onClick={() => removeGroup(group.id)} aria-label={`刪除${group.name}分類`}>刪除分類</button></div>{items.length === 0 ? <p className="group-empty">此分類尚未加入停車場</p> : items.map((p) => <div className="favorite-row" key={p.id}><button className="favorite-main" onClick={() => { setFavoritesOpen(false); setSelected(p); }}><span className={`favorite-status ${statusClass(p)}`}>{availabilityLabel(p)}</span><span><strong>{p.name}</strong><small>{p.area} · {p.address}</small></span></button><button className="favorite-remove" onClick={() => toggleFavorite(group.id, p.id)} aria-label={`從${group.name}移除${p.name}`}>×</button></div>)}</section>; })}</div>}<div className="new-group standalone"><label htmlFor="panel-group-name">新增空白分類</label><div><input id="panel-group-name" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createGroup()} placeholder="輸入分類名稱" maxLength={20} /><button onClick={createGroup} disabled={!newGroupName.trim()}>建立</button></div></div></article></div>
+      )}
+
+      <footer><span>{updateTime ? `車位資料更新：${updateTime}` : "正在同步官方資料"}</span><a href="https://data.taipei/dataset/detail?id=d5c0656b-5250-4179-a491-c94daa56ef2c" target="_blank" rel="noreferrer">資料來源：臺北市資料大平臺 ↗</a></footer>
     </main>
   );
 }
