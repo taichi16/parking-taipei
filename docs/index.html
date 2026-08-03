@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>泊台北｜即時停車位</title><meta name="description" content="台北市即時停車位地圖、行政區與關鍵字查詢"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css"></head>
+<body><header><div class="brand"><b>P</b><span><strong>泊台北</strong><small>即時停車位查詢</small></span></div><button id="favoritesBtn">★ 常用停車場 <i id="favCount">0</i></button></header>
+<section class="hero"><p>TAIPEI PARKING</p><h1>找到空位，<br><em>少繞一圈。</em></h1><div class="search"><input id="search" placeholder="搜尋停車場、地址或地標"><button id="refresh">↻ 更新</button></div><div id="districts" class="chips"></div></section>
+<main><div class="results"><div><small id="scope">台北市全區</small><h2 id="resultCount">正在取得資料</h2></div><div class="toggle"><button class="active" data-view="map">地圖</button><button data-view="list">列表</button></div></div><div id="map"></div><div id="list" class="list hidden"></div><p id="status"></p></main>
+<footer><span id="updated">正在同步官方資料</span><a href="https://data.taipei/dataset/detail?id=d5c0656b-5250-4179-a491-c94daa56ef2c">資料來源：臺北市資料大平臺 ↗</a></footer>
+<div id="modal" class="backdrop hidden"><article><button class="close">×</button><div id="modalBody"></div></article></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script></body></html>
